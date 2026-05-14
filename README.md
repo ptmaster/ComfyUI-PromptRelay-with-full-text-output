@@ -4,3 +4,5 @@ ComfyUI-PromptRelay with full text output
 https://github.com/kijai/ComfyUI-PromptRelay Just overwrite the nodes.py file in the node directory.
 
 Thanks to KJ for creating the multi-segment prompt node PromptRelay, which constantly reshapes and accelerates the global progress of open-source AI for humanity.
+
+A typical usage scenario: Output the silent prompt of WAN22, then hand it over to AI to create the corresponding dialogue.
