@@ -217,6 +217,8 @@ class PromptRelayEncodeTimeline(io.ComfyNode):
                 io.Model.Output(display_name="model"),
                 io.Conditioning.Output(display_name="positive"),
                 io.String.Output(display_name="full_prompt", tooltip="Combined global and local prompts for easy editing. Format: global_prompt\\n---\\nlocal_prompt1\\nlocal_prompt2\\n..."),
+                io.Int.Output(display_name="max_frames", tooltip="Outputs the max_frames input value (pixel-space total frames)."),
+                io.Float.Output(display_name="fps", tooltip="Outputs the fps input value."),
             ],
         )
 
@@ -234,7 +236,8 @@ class PromptRelayEncodeTimeline(io.ComfyNode):
         else:
             combined = "\n".join(local_list)
 
-        return io.NodeOutput(patched, conditioning, combined)
+        # Output the original max_frames and fps values as well
+        return io.NodeOutput(patched, conditioning, combined, max_frames, fps)
 
 
 NODE_CLASS_MAPPINGS = {
