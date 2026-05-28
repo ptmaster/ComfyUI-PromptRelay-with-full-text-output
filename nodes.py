@@ -159,7 +159,9 @@ class PromptRelayEncode(io.ComfyNode):
 
 
 class PromptRelayEncodeTimeline(io.ComfyNode):
-    """WYSIWYG timeline variant — segments and lengths come from a visual editor in the node UI."""
+    """WYSIWYG timeline variant — segments and lengths come from a visual editor in the node UI.
+    Supports dual‑model (high‑frequency + optional low‑frequency) for Wan2.2.
+    """
 
     @classmethod
     def define_schema(cls):
@@ -170,10 +172,12 @@ class PromptRelayEncodeTimeline(io.ComfyNode):
             description=(
                 "Same as Prompt Relay Encode, but local prompts and segment lengths are edited "
                 "visually as draggable blocks on a timeline. The max_frames input only sets the "
-                "timeline scale (pixel space) — actual frame count is still read from the latent."
+                "timeline scale (pixel space) — actual frame count is still read from the latent.\n\n"
+                "Optional low‑frequency model input (Wan2.2) – if left unconnected, works as a single‑model node."
             ),
             inputs=[
-                io.Model.Input("model"),
+                io.Model.Input("model", tooltip="High‑frequency model (required)."),
+                io.Model.Input("model_low", optional=True, tooltip="Low‑frequency model (optional, Wan2.2). Leave empty for single‑model mode."),
                 io.Clip.Input("clip"),
                 io.Latent.Input("latent", tooltip="Empty latent video — dimensions are read from its shape."),
                 io.String.Input(
@@ -214,27 +218,37 @@ class PromptRelayEncodeTimeline(io.ComfyNode):
                 ),
             ],
             outputs=[
-                io.Model.Output(display_name="model"),
-                io.Conditioning.Output(display_name="positive"),
+                io.Model.Output(display_name="model", tooltip="Patched high‑frequency model."),
+                io.Conditioning.Output(display_name="positive", tooltip="Positive conditioning for the high‑frequency model."),
                 io.String.Output(display_name="full_prompt", tooltip="Combined global and local prompts for easy editing. Format: global_prompt\\n---\\nlocal_prompt1\\nlocal_prompt2\\n..."),
+                io.Model.Output(display_name="model_low", tooltip="Patched low‑frequency model (None if not provided)."),
+                io.Conditioning.Output(display_name="positive_low", tooltip="Positive conditioning for the low‑frequency model (None if not provided)."),
             ],
         )
 
     @classmethod
-    def execute(cls, model, clip, latent, global_prompt, max_frames, timeline_data, local_prompts, segment_lengths, epsilon, fps=24.0, time_units="frames", relay_options=None) -> io.NodeOutput:
-        patched, conditioning = _encode_relay(
+    def execute(cls, model, clip, latent, global_prompt, max_frames, timeline_data, local_prompts, segment_lengths, epsilon, fps=24.0, time_units="frames", relay_options=None, model_low=None) -> io.NodeOutput:
+        # Process high‑frequency model
+        patched_high, conditioning_high = _encode_relay(
             model, clip, latent, global_prompt, local_prompts, segment_lengths, epsilon, relay_options,
         )
 
+        # Process low‑frequency model (optional)
+        patched_low = None
+        conditioning_low = None
+        if model_low is not None:
+            patched_low, conditioning_low = _encode_relay(
+                model_low, clip, latent, global_prompt, local_prompts, segment_lengths, epsilon, relay_options,
+            )
+
         # Build a combined full prompt string for easy editing
-        # Format: global_prompt + separator + each local prompt on its own line
         local_list = [p.strip() for p in local_prompts.split("|") if p.strip()]
         if global_prompt.strip():
             combined = global_prompt.strip() + "\n---\n" + "\n".join(local_list)
         else:
             combined = "\n".join(local_list)
 
-        return io.NodeOutput(patched, conditioning, combined)
+        return io.NodeOutput(patched_high, conditioning_high, combined, patched_low, conditioning_low)
 
 
 NODE_CLASS_MAPPINGS = {
